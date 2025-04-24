@@ -26,25 +26,22 @@ origins = [
     "http://localhost:5173",    # Your React app
     "http://localhost:3000",    # Common React port
     "http://127.0.0.1:5173",    # Alternative localhost
-    "*"                         # Allow all origins (use with caution in production)
 ]
 
+# Apply CORS middleware with explicit headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Be more specific for security
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization", "Accept", "Origin", 
+                  "User-Agent", "DNT", "Cache-Control", "X-Requested-With"],
+    expose_headers=["Content-Type", "X-API-Key"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
-@app.middleware("http")
-async def add_cors_headers(request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+# Remove the additional middleware since it's redundant with proper CORS middleware
+# The CORSMiddleware should handle all CORS headers automatically
 
 # Base URL for the Hourglass API - USING HTTPS!
 BASE_URL = 'https://hourglass-qa.shieldfoundry.com'
@@ -131,28 +128,59 @@ async def get_resources(
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-# Route to verify API key is working
-@app.get("/api/check-connection")
-async def check_connection():
+@app.post("/api/schedules")
+async def create_schedule(schedule_data: dict):
     """
-    Test endpoint to verify API key and connection to Hourglass API
+    Proxy endpoint to create a schedule in Hourglass API
     """
-    if not API_KEY:
-        return {"status": "error", "message": "API key not configured"}
-        
     try:
-        # Make a simple request to test the connection
-        response = await http_client.get("/api/resources")
+        print(f"Making request to {BASE_URL}/api/schedules with data: {schedule_data}")
+        
+        # Fix the data format if needed
+        # Check if the data matches the expected format
+        if "timeslot" not in schedule_data or "resources" not in schedule_data:
+            raise HTTPException(status_code=400, detail="Invalid schedule data format")
+            
+        # Make request to the Hourglass API
+        response = await http_client.post("/api/schedules", json=schedule_data)
         response.raise_for_status()
-        return {
-            "status": "success", 
-            "message": "Connection to Hourglass API successful",
-            "url": f"{BASE_URL}/api/resources"
-        }
+        
+        # Print response for debugging
+        print(f"Response status: {response.status_code}")
+        print(f"Response headers: {response.headers}")
+        print(f"Response body: {response.text}")
+        
+        # Return the data as JSON
+        return response.json()
+    
+    except httpx.HTTPStatusError as e:
+        # Handle HTTP errors (4xx, 5xx)
+        status_code = e.response.status_code
+        print(f"HTTP Error {status_code}: {e.response.text}")
+        try:
+            error_detail = e.response.json()
+        except ValueError:
+            error_detail = {"detail": e.response.text}
+        
+        raise HTTPException(status_code=status_code, detail=error_detail)
+    
+    except httpx.RequestError as e:
+        # Handle request errors (connection, timeout, etc.)
+        print(f"Request Error: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Service unavailable: {str(e)}")
+    
     except Exception as e:
-        return {"status": "error", "message": f"Connection failed: {str(e)}"}
+        print(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Simple CORS test endpoint
+@app.options("/api/schedules")
+async def options_schedule():
+    """
+    Handle OPTIONS preflight request for schedules endpoint
+    """
+    return {}
+
 @app.get("/test-cors")
 async def test_cors():
     """
