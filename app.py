@@ -134,44 +134,104 @@ async def create_schedule(schedule_data: dict):
     Proxy endpoint to create a schedule in Hourglass API
     """
     try:
-        print(f"Making request to {BASE_URL}/api/schedules with data: {schedule_data}")
+        # Log the incoming request
+        print(f"Creating schedule with data: {schedule_data}")
         
-        # Fix the data format if needed
-        # Check if the data matches the expected format
-        if "timeslot" not in schedule_data or "resources" not in schedule_data:
-            raise HTTPException(status_code=400, detail="Invalid schedule data format")
-            
-        # Make request to the Hourglass API
-        response = await http_client.post("/api/schedules", json=schedule_data)
+        # Validate required fields
+        if "resources" not in schedule_data or "timeslot" not in schedule_data:
+            raise HTTPException(status_code=400, detail="Missing required fields: resources and timeslot")
+        
+        # Make request to Hourglass API
+        response = await http_client.post(
+            "/api/schedules",
+            json=schedule_data
+        )
+        
+        # Handle response
         response.raise_for_status()
-        
-        # Print response for debugging
-        print(f"Response status: {response.status_code}")
-        print(f"Response headers: {response.headers}")
-        print(f"Response body: {response.text}")
-        
-        # Return the data as JSON
         return response.json()
-    
-    except httpx.HTTPStatusError as e:
-        # Handle HTTP errors (4xx, 5xx)
-        status_code = e.response.status_code
-        print(f"HTTP Error {status_code}: {e.response.text}")
-        try:
-            error_detail = e.response.json()
-        except ValueError:
-            error_detail = {"detail": e.response.text}
         
-        raise HTTPException(status_code=status_code, detail=error_detail)
-    
-    except httpx.RequestError as e:
-        # Handle request errors (connection, timeout, etc.)
-        print(f"Request Error: {str(e)}")
-        raise HTTPException(status_code=503, detail=f"Service unavailable: {str(e)}")
-    
+    except httpx.HTTPStatusError as e:
+        print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.json()
+        )
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        print(f"Error creating schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/schedules/{schedule_id}/status")
+async def update_schedule_status(schedule_id: str, status_data: dict):
+    """
+    Proxy endpoint to update schedule status in Hourglass API
+    """
+    try:
+        # Log the incoming request
+        print(f"Updating schedule {schedule_id} status with data: {status_data}")
+        
+        # Validate status data
+        if "status" not in status_data:
+            raise HTTPException(status_code=400, detail="Missing status field")
+            
+        if status_data["status"] != "CANCELLED":
+            raise HTTPException(status_code=400, detail="Invalid status. Only CANCELLED is supported.")
+        
+        # Make request to Hourglass API
+        response = await http_client.put(
+            f"/api/schedules/{schedule_id}/status",
+            json={"status": "CANCELLED"}
+        )
+        
+        # Handle response
+        response.raise_for_status()
+        return response.json()
+        
+    except httpx.HTTPStatusError as e:
+        print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.json()
+        )
+    except Exception as e:
+        print(f"Error updating schedule status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add a GET endpoint to fetch schedules
+@app.get("/api/schedules")
+async def get_schedules(
+    page: Optional[int] = Query(1, description="Page number"),
+    sort: Optional[str] = Query("id,asc", description="Sort field and direction")
+):
+    """
+    Proxy endpoint to get schedules from Hourglass API
+    """
+    try:
+        # Construct query parameters
+        params = {
+            "page": page,
+            "sort": sort
+        }
+        
+        # Make request to Hourglass API
+        response = await http_client.get(
+            "/api/schedules",
+            params=params
+        )
+        
+        # Handle response
+        response.raise_for_status()
+        return response.json()
+        
+    except httpx.HTTPStatusError as e:
+        print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.json()
+        )
+    except Exception as e:
+        print(f"Error fetching schedules: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Simple CORS test endpoint
 @app.options("/api/schedules")
