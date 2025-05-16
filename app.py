@@ -134,32 +134,63 @@ async def create_schedule(schedule_data: dict):
     Proxy endpoint to create a schedule in Hourglass API
     """
     try:
-        # Log the incoming request
-        print(f"Creating schedule with data: {schedule_data}")
+        # Debug log incoming data
+        print("Received schedule data:", schedule_data)
+
+        # Validate resource data
+        if not schedule_data.get("resources"):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing resources data"
+            )
+
+        # Get resource info - validate it exists
+        resource_info = schedule_data["resources"][0]
+        resource_id = int(resource_info.get("id"))  # Ensure it's an integer
         
-        # Validate required fields
-        if "resources" not in schedule_data or "timeslot" not in schedule_data:
-            raise HTTPException(status_code=400, detail="Missing required fields: resources and timeslot")
-        
-        # Make request to Hourglass API
-        response = await http_client.post(
-            "/api/schedules",
-            json=schedule_data
-        )
-        
-        # Handle response
+        if not resource_id:
+            raise HTTPException(status_code=400, detail="Invalid resource ID")
+
+        # Validate timeslot data
+        if not schedule_data.get("timeslot"):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing timeslot data"
+            )
+
+        # Prepare data for Hourglass API
+        hourglass_data = {
+            "resources": [
+                {"id": resource_id}
+            ],
+            "timeslot": {
+                "start": schedule_data["timeslot"].get("start"),
+                "end": schedule_data["timeslot"].get("end")
+            }
+        }
+
+        print("Sending to Hourglass:", hourglass_data)
+
+        # Make request to Hourglass
+        response = await http_client.post("/api/schedules", json=hourglass_data)
         response.raise_for_status()
+
+        # Log success
+        print("Schedule created successfully:", response.json())
         return response.json()
-        
+
     except httpx.HTTPStatusError as e:
-        print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        print(f"Hourglass API error: {e.response.text}")
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.json()
         )
     except Exception as e:
         print(f"Error creating schedule: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @app.put("/api/schedules/{schedule_id}/status")
 async def update_schedule_status(schedule_id: str, status_data: dict):
@@ -167,35 +198,65 @@ async def update_schedule_status(schedule_id: str, status_data: dict):
     Proxy endpoint to update schedule status in Hourglass API
     """
     try:
-        # Log the incoming request
-        print(f"Updating schedule {schedule_id} status with data: {status_data}")
-        
-        # Validate status data
-        if "status" not in status_data:
-            raise HTTPException(status_code=400, detail="Missing status field")
-            
+        # Validate status
+        if not status_data.get("status"):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing status in request"
+            )
+
         if status_data["status"] != "CANCELLED":
-            raise HTTPException(status_code=400, detail="Invalid status. Only CANCELLED is supported.")
-        
-        # Make request to Hourglass API
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid status. Only CANCELLED is supported."
+            )
+
+        # Clean and validate schedule_id
+        clean_id = schedule_id.replace('event_', '')
+        try:
+            numeric_id = int(clean_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid schedule ID format. Expected numeric ID, got: {schedule_id}"
+            )
+
+        # Prepare data for Hourglass
+        hourglass_data = {
+            "id": numeric_id,
+            "status": "CANCELLED"
+        }
+
+        print(f"Cancelling schedule {numeric_id}:", hourglass_data)
+
+        # Make request to Hourglass
         response = await http_client.put(
-            f"/api/schedules/{schedule_id}/status",
-            json={"status": "CANCELLED"}
+            f"/api/schedules/{numeric_id}/status",
+            json=hourglass_data
         )
-        
-        # Handle response
         response.raise_for_status()
+
+        print("Status updated successfully:", response.json())
         return response.json()
-        
+
     except httpx.HTTPStatusError as e:
-        print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        print(f"Hourglass API error: {e.response.text}")
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.json()
         )
+    except ValueError as e:
+        print(f"Invalid schedule ID: {schedule_id}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid schedule ID format: {str(e)}"
+        )
     except Exception as e:
-        print(f"Error updating schedule status: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error updating status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 # Add a GET endpoint to fetch schedules
 @app.get("/api/schedules")
