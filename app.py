@@ -311,3 +311,51 @@ async def test_cors():
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+
+@app.post("/api/resources")
+async def create_resource(resource_data: dict):
+    """
+    Proxy endpoint to create a new resource/course in Hourglass API
+    """
+    try:
+        # Validate required fields
+        if not resource_data.get("name"):
+            raise HTTPException(status_code=400, detail="Missing course name")
+        
+        if not resource_data.get("description"):
+            raise HTTPException(status_code=400, detail="Missing course description")
+
+        # Prepare data for Hourglass API with fixed values
+        hourglass_data = {
+            "name": resource_data["name"],
+            "description": resource_data["description"],
+            "externalId": str(resource_data.get("externalId", "9")),
+            "resourceType": {
+                "id": 23
+            },
+            "serviceOffering": {
+                "id": 7
+            }
+        }
+
+        print("Creating new course:", hourglass_data)
+
+        # Make request to Hourglass
+        response = await http_client.post("/api/resources", json=hourglass_data)
+        response.raise_for_status()
+
+        print("Course created successfully:", response.json())
+        return response.json()
+
+    except httpx.HTTPStatusError as e:
+        print(f"Hourglass API error: {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.json()
+        )
+    except Exception as e:
+        print(f"Error creating course: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
