@@ -331,10 +331,10 @@ async def create_resource(resource_data: dict):
             "description": resource_data["description"],
             "externalId": str(resource_data.get("externalId", "9")),
             "resourceType": {
-                "id": 23
+                "id": 25
             },
             "serviceOffering": {
-                "id": 7
+                "id": 8
             }
         }
 
