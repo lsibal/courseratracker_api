@@ -26,6 +26,8 @@ origins = [
     "http://localhost:5173",    # Your React app
     "http://localhost:3000",    # Common React port
     "http://127.0.0.1:5173",    # Alternative localhost
+    "http://10.4.10.176:5173",  # Specific IP address
+    "https://hourglass-qa.shieldfoundry.com:5173"  # Hourglass QA
 ]
 
 # Apply CORS middleware with explicit headers
