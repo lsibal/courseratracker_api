@@ -23,11 +23,10 @@ app = FastAPI(title="Hourglass API Proxy")
 
 # Configure CORS - IMPORTANT: Make sure this is set up correctly
 origins = [
-    "http://localhost:5173",    # Your React app
-    "http://localhost:3000",    # Common React port
-    "http://127.0.0.1:5173",    # Alternative localhost
-    "http://10.4.10.176:5173",  # Specific IP address
-    "https://hourglass-qa.shieldfoundry.com:5173"  # Hourglass QA
+    "http://10.4.10.176",
+    "http://127.0.0.1:5173",  # Keep this for the React dev server
+    "http://localhost:5173",   # Keep this for React dev server
+    # Address later
 ]
 
 # Apply CORS middleware with explicit headers
